@@ -1,74 +1,48 @@
-import { useState } from 'react'
-import BecomeProviderModal from '@/components/BecomeProviderModal'
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
-  ScrollView,
-  StatusBar,
-  Dimensions,
+  View, Text, StyleSheet, SafeAreaView,
+  TouchableOpacity, ScrollView, StatusBar, Dimensions,
 } from 'react-native'
-import {
-  Feather,
-  Ionicons,
-  MaterialIcons,
-  Octicons,
-} from '@expo/vector-icons'
+import { Feather, Ionicons, MaterialIcons, Octicons } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'expo-router'
+import BecomeProviderModal from '@/components/BecomeProviderModal'
 
 const { width } = Dimensions.get('window')
 
 export default function ProfileScreen() {
   const router = useRouter()
   const [showProviderModal, setShowProviderModal] = useState(false)
+  const [profile, setProfile] = useState<any>(null)
+
+  useEffect(() => { loadProfile() }, [])
+
+  async function loadProfile() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+    if (data) setProfile(data)
+  }
+
+  function initials(name: string) {
+    return name?.split(' ').map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() ?? '?'
+  }
+
   const SETTINGS_TOP = [
-    {
-      icon: <Feather name="settings" size={23} color="#111" />,
-      label: 'Account settings',
-      onPress: () => {},
-    },
-    {
-      icon: <Feather name="help-circle" size={23} color="#111" />,
-      label: 'Get help',
-      onPress: () => {},
-    },
-    {
-      icon: <Feather name="user" size={23} color="#111" />,
-      label: 'View profile',
-      onPress: () => {},
-    },
-    {
-      icon: <Feather name="shield" size={23} color="#111" />,
-      label: 'Privacy',
-      onPress: () => {},
-    },
+    { icon: <Feather name="settings" size={23} color="#111" />, label: 'Account settings', onPress: () => {} },
+    { icon: <Feather name="help-circle" size={23} color="#111" />, label: 'Get help', onPress: () => {} },
+    { icon: <Feather name="user" size={23} color="#111" />, label: 'View profile', onPress: () => {} },
+    { icon: <Feather name="shield" size={23} color="#111" />, label: 'Privacy', onPress: () => {} },
   ]
 
   const SETTINGS_BOTTOM = [
-    {
-      icon: <Feather name="users" size={23} color="#111" />,
-      label: 'Refer a friend',
-      onPress: () => {},
-    },
-    {
-      icon: <MaterialIcons name="accessibility" size={23} color="#111" />,
-      label: 'Find a co-host',
-      onPress: () => {},
-    },
-    {
-      icon: <Feather name="gift" size={23} color="#111" />,
-      label: 'Gift cards',
-      onPress: () => {},
-    },
-    {
-      icon: <Octicons name="book" size={23} color="#111" />,
-      label: 'Legal',
-      onPress: () => {},
-    },
+    { icon: <Feather name="users" size={23} color="#111" />, label: 'Refer a friend', onPress: () => {} },
+    { icon: <Feather name="gift" size={23} color="#111" />, label: 'Gift cards', onPress: () => {} },
+    { icon: <Octicons name="book" size={23} color="#111" />, label: 'Legal', onPress: () => {} },
     {
       icon: <Feather name="log-out" size={23} color="#111" />,
       label: 'Log out',
@@ -81,23 +55,24 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F7F7F7" />
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
         {/* Avatar */}
         <View style={styles.avatarContainer}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarEmoji}>🧑🏻</Text>
+            {profile?.full_name ? (
+              <Text style={styles.avatarText}>{initials(profile.full_name)}</Text>
+            ) : (
+              <Text style={styles.avatarEmoji}>🧑🏻</Text>
+            )}
           </View>
         </View>
 
         {/* Name */}
-        <Text style={styles.name}>Seb Jachec</Text>
+        <Text style={styles.name}>{profile?.full_name ?? 'Your Name'}</Text>
 
-        {/* Rating */}
+        {/* Rating row */}
         <View style={styles.ratingRow}>
           <Text style={styles.ratingText}>4.9</Text>
           <Ionicons name="star" size={18} color="#FFB400" style={{ marginLeft: 4 }} />
@@ -110,49 +85,57 @@ export default function ProfileScreen() {
         <View style={styles.quickActions}>
           <TouchableOpacity activeOpacity={0.9} style={styles.quickCard}>
             <View style={[styles.quickIconContainer, { backgroundColor: '#FFF4EC' }]}>
-              <Feather name="activity" size={23} color="#000000" />
+              <Feather name="activity" size={23} color="#FF8A3D" />
             </View>
             <Text style={styles.quickText}>Activity</Text>
           </TouchableOpacity>
-
           <TouchableOpacity activeOpacity={0.9} style={styles.quickCard}>
             <View style={[styles.quickIconContainer, { backgroundColor: '#ececff' }]}>
-              <Ionicons name="people" size={22} color="#000000" />
+              <Ionicons name="people" size={22} color="#6C63FF" />
             </View>
             <Text style={styles.quickText}>Circle</Text>
           </TouchableOpacity>
-
           <TouchableOpacity activeOpacity={0.9} style={styles.quickCard}>
-            <View style={[styles.quickIconContainer, { backgroundColor: '#31313134' }]}>
-              <Feather name="edit-2" size={21} color="#000000" />
+            <View style={[styles.quickIconContainer, { backgroundColor: '#f0f0f0' }]}>
+              <Feather name="edit-2" size={21} color="#111" />
             </View>
             <Text style={styles.quickText}>Edit</Text>
           </TouchableOpacity>
         </View>
 
         {/* Become Provider */}
-        <TouchableOpacity
-          activeOpacity={0.9}
-          style={styles.providerCard}
-          onPress={() => setShowProviderModal(true)}
-        >
-          <View style={styles.providerGlow} />
-          <View>
-            <Text style={styles.providerTitle}>Become a provider</Text>
-            <Text style={styles.providerSubtitle}>Share what you have, earn extra income.</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color="#B8B8B8" />
-        </TouchableOpacity>
+{profile?.role === 'provider' ? (
+  <TouchableOpacity
+    activeOpacity={0.9}
+    style={styles.providerCard}
+    onPress={() => router.push('/provider/studio' as any)}
+  >
+    <View style={styles.providerGlow} />
+    <View>
+      <Text style={styles.providerTitle}>Provider Dashboard</Text>
+      <Text style={styles.providerSubtitle}>Switch to your provider view.</Text>
+    </View>
+    <Ionicons name="chevron-forward" size={24} color="#B8B8B8" />
+  </TouchableOpacity>
+) : (
+  <TouchableOpacity
+    activeOpacity={0.9}
+    style={styles.providerCard}
+    onPress={() => setShowProviderModal(true)}
+  >
+    <View style={styles.providerGlow} />
+    <View>
+      <Text style={styles.providerTitle}>Become a provider</Text>
+      <Text style={styles.providerSubtitle}>Share what you have, earn extra income.</Text>
+    </View>
+    <Ionicons name="chevron-forward" size={24} color="#B8B8B8" />
+  </TouchableOpacity>
+)}
 
-        {/* Settings Card */}
+        {/* Settings */}
         <View style={styles.settingsCard}>
           {SETTINGS_TOP.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              activeOpacity={0.85}
-              style={styles.settingRow}
-              onPress={item.onPress}
-            >
+            <TouchableOpacity key={index} activeOpacity={0.85} style={styles.settingRow} onPress={item.onPress}>
               <View style={styles.settingLeft}>
                 {item.icon}
                 <Text style={styles.settingLabel}>{item.label}</Text>
@@ -160,22 +143,12 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={21} color="#C6C6C6" />
             </TouchableOpacity>
           ))}
-
           <View style={styles.divider} />
-
           {SETTINGS_BOTTOM.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              activeOpacity={0.85}
-              style={styles.settingRow}
-              onPress={item.onPress}
-            >
+            <TouchableOpacity key={index} activeOpacity={0.85} style={styles.settingRow} onPress={item.onPress}>
               <View style={styles.settingLeft}>
                 {item.icon}
-                <Text style={[
-                  styles.settingLabel,
-                  item.label === 'Log out' && { color: '#FF3B30' }
-                ]}>
+                <Text style={[styles.settingLabel, item.label === 'Log out' && { color: '#FF3B30' }]}>
                   {item.label}
                 </Text>
               </View>
@@ -183,169 +156,67 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           ))}
         </View>
-       <BecomeProviderModal
-  visible={showProviderModal}
-  onClose={() => setShowProviderModal(false)}
-  onContinue={() => {
-    setShowProviderModal(false)
-    router.push('/onboarding/provider')
-  }}
-/> 
+
       </ScrollView>
+
+      <BecomeProviderModal
+        visible={showProviderModal}
+        onClose={() => setShowProviderModal(false)}
+        onContinue={() => {
+          setShowProviderModal(false)
+          router.push('/onboarding/provider' as any)
+        }}
+      />
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  scrollContent: {
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
-  avatarContainer: {
-    marginTop: 36,
-    alignItems: 'center',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
+  scrollContent: { paddingBottom: 40, alignItems: 'center' },
+  avatarContainer: { marginTop: 36, alignItems: 'center' },
   avatar: {
-    width: 108,
-    height: 108,
-    borderRadius: 54,
-    backgroundColor: '#d1d1d1',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 108, height: 108, borderRadius: 54,
+    backgroundColor: '#EFEFEF',
+    alignItems: 'center', justifyContent: 'center',
   },
-  avatarEmoji: {
-    fontSize: 54,
-  },
-  name: {
-    marginTop: 28,
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111',
-    letterSpacing: -0.7,
-  },
-  ratingRow: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    fontSize: 17,
-    color: '#2D2D2D',
-    fontWeight: '500',
-  },
-  dot: {
-    marginHorizontal: 10,
-    fontSize: 18,
-    color: '#8C8C8C',
-  },
-  verifiedText: {
-    fontSize: 17,
-    color: '#2D2D2D',
-    fontWeight: '500',
-  },
-  quickActions: {
-    width: width - 48,
-    marginTop: 38,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+  avatarText: { fontSize: 40, fontWeight: '700', color: '#111' },
+  avatarEmoji: { fontSize: 54 },
+  name: { marginTop: 28, fontSize: 28, fontWeight: '700', color: '#111', letterSpacing: -0.7 },
+  ratingRow: { marginTop: 14, flexDirection: 'row', alignItems: 'center' },
+  ratingText: { fontSize: 17, color: '#2D2D2D', fontWeight: '500' },
+  dot: { marginHorizontal: 10, fontSize: 18, color: '#8C8C8C' },
+  verifiedText: { fontSize: 17, color: '#2D2D2D', fontWeight: '500' },
+  quickActions: { width: width - 48, marginTop: 38, flexDirection: 'row', justifyContent: 'space-between' },
   quickCard: {
-    width: (width - 68) / 3,
-    height: 132,
-    backgroundColor: '#ffffff',
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#e4e4e4',
+    width: (width - 68) / 3, height: 132,
+    backgroundColor: '#fff', borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#e4e4e4',
   },
-  quickIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  quickText: {
-    fontSize: 17,
-    fontWeight: '500',
-    color: '#000000',
-  },
+  quickIconContainer: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  quickText: { fontSize: 17, fontWeight: '500', color: '#111' },
   providerCard: {
-    width: width - 48,
-    height: 118,
-    backgroundColor: '#ffffff31',
-    borderRadius: 28,
-    marginTop: 26,
-    paddingHorizontal: 26,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e4e4e4',
+    width: width - 48, height: 118,
+    backgroundColor: '#fff', borderRadius: 28, marginTop: 26,
+    paddingHorizontal: 26, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'space-between',
+    overflow: 'hidden', borderWidth: 1, borderColor: '#e4e4e4',
   },
   providerGlow: {
-    position: 'absolute',
-    left: -20,
-    bottom: -20,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#0e0e0e31',
-    opacity: 0,
+    position: 'absolute', left: -20, bottom: -20,
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: '#FFE9DD', opacity: 0.9,
   },
-  providerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111',
-    marginBottom: 10,
-  },
-  providerSubtitle: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '400',
-  },
+  providerTitle: { fontSize: 20, fontWeight: '700', color: '#111', marginBottom: 10 },
+  providerSubtitle: { fontSize: 16, color: '#666', fontWeight: '400' },
   settingsCard: {
-    width: width - 48,
-    backgroundColor: '#FFF',
-    borderRadius: 32,
-    marginTop: 28,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOpacity: 0,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    width: width - 48, backgroundColor: '#fff',
+    borderRadius: 32, marginTop: 28, paddingVertical: 10,
+    borderWidth: 1, borderColor: '#EFEFEF',
   },
-  settingRow: {
-    height: 68,
-    paddingHorizontal: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  settingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  settingLabel: {
-    marginLeft: 18,
-    fontSize: 18,
-    color: '#111',
-    fontWeight: '400',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#e4e4e4',
-    marginHorizontal: 22,
-    marginVertical: 8,
-  },
+  settingRow: { height: 68, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  settingLeft: { flexDirection: 'row', alignItems: 'center' },
+  settingLabel: { marginLeft: 18, fontSize: 18, color: '#111', fontWeight: '400' },
+  divider: { height: 1, backgroundColor: '#EFEFEF', marginHorizontal: 22, marginVertical: 8 },
 })

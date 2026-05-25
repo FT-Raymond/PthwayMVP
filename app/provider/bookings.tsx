@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ProviderNav } from '@/components/ProviderNav'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator,
@@ -30,9 +31,13 @@ export default function ProviderBookings() {
   useEffect(() => { loadBookings() }, [])
 
   async function loadBookings() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setLoading(false); return }
+
     const { data } = await supabase
       .from('bookings')
-      .select('id, customer_id, starts_at, status, amount_paid, note, created_at')
+      .select('id, customer_id, starts_at, status, amount_paid, created_at')
+      .eq('provider_id', user.id)
       .order('starts_at', { ascending: true })
 
     if (data) {
@@ -52,14 +57,14 @@ export default function ProviderBookings() {
   const pendingCount = all.filter((b) => b.status === 'pending').length
   const revenue = all.filter((b) => b.status !== 'cancelled').reduce((s: number, b: any) => s + (b.amount_paid ?? 0), 0)
 
-  return (
+return (
+    <View style={{ flex: 1 }}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <Text style={styles.title}>Bookings</Text>
         <Text style={styles.subtitle}>{all.length} total · {pendingCount} need a reply</Text>
       </View>
 
-      {/* Stats */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <View style={styles.statCardHeader}>
@@ -79,7 +84,6 @@ export default function ProviderBookings() {
         </View>
       </View>
 
-      {/* Filters */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters} contentContainerStyle={styles.filtersContent}>
         {(['all', 'confirmed', 'pending', 'cancelled'] as const).map((f) => (
           <TouchableOpacity
@@ -94,7 +98,6 @@ export default function ProviderBookings() {
         ))}
       </ScrollView>
 
-      {/* List header */}
       <View style={styles.listHeader}>
         <Text style={styles.sectionTitle}>Upcoming</Text>
         <Text style={styles.listCount}>{filtered.length} bookings</Text>
@@ -141,6 +144,8 @@ export default function ProviderBookings() {
         </View>
       )}
     </ScrollView>
+    <ProviderNav />
+    </View>
   )
 }
 
@@ -151,14 +156,14 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: '700', letterSpacing: -0.8, lineHeight: 36 },
   subtitle: { fontSize: 13, color: '#888', marginTop: 4 },
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-  statCard: { flex: 1, borderWidth: 1, borderColor: '#f0f0f0', borderRadius: 16, padding: 16, backgroundColor: '#fff' },
+  statCard: { flex: 1, borderWidth: 1, borderColor: '#f0f0f0', borderRadius: 16, padding: 16 },
   statCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   statCardLabel: { fontSize: 10, fontWeight: '600', color: '#888', letterSpacing: 0.5 },
   statCardValue: { fontSize: 24, fontWeight: '700', letterSpacing: -0.5 },
   statCardSub: { fontSize: 12, color: '#888', marginTop: 8 },
   filters: { marginBottom: 20 },
   filtersContent: { gap: 8, paddingHorizontal: 2 },
-  filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#e0e0e0', backgroundColor: '#fff' },
+  filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#e0e0e0' },
   filterBtnActive: { backgroundColor: '#111', borderColor: '#111' },
   filterText: { fontSize: 13, fontWeight: '600', color: '#666' },
   filterTextActive: { color: '#fff' },

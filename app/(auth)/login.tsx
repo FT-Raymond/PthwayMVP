@@ -1,31 +1,24 @@
 import { useState } from 'react'
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Alert,
+  View, Text, TextInput, TouchableOpacity,
+  StyleSheet, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert,
 } from 'react-native'
 import { supabase } from '@/lib/supabase'
-import { Link } from 'expo-router'
+import { Link, useRouter } from 'expo-router'
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
-async function signIn() {
-  setLoading(true)
-  console.log('Attempting sign in with:', email)
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  console.log('Result:', JSON.stringify({ data, error }))
-  if (error) Alert.alert('Error', error.message)
-  setLoading(false)
-}
+  async function signIn() {
+    setLoading(true)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) Alert.alert('Error', error.message)
+    setLoading(false)
+  }
 
   return (
     <KeyboardAvoidingView

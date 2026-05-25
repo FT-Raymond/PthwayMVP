@@ -1,14 +1,8 @@
 import { useState } from 'react'
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Alert,
+  View, Text, TextInput, TouchableOpacity,
+  StyleSheet, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert,
 } from 'react-native'
 import { supabase } from '@/lib/supabase'
 import { Link, useRouter } from 'expo-router'

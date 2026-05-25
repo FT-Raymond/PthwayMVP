@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ProviderNav } from '@/components/ProviderNav'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, ActivityIndicator, Alert,
@@ -9,7 +10,6 @@ import { LogOut, Save } from 'lucide-react-native'
 
 export default function ProviderProfile() {
   const [user, setUser] = useState<any>(null)
-  const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -28,15 +28,12 @@ export default function ProviderProfile() {
     const { data: { user } } = await supabase.auth.getUser()
     setUser(user)
     if (!user) { setLoading(false); return }
-
     const { data } = await supabase
       .from('profiles')
       .select('*, provider_profiles(*)')
       .eq('id', user.id)
       .single()
-
     if (data) {
-      setProfile(data)
       setForm({
         full_name: data.full_name ?? '',
         username: data.username ?? '',
@@ -54,7 +51,12 @@ export default function ProviderProfile() {
     setSaving(true)
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: form.full_name, username: form.username, bio: form.bio, location: form.location })
+      .update({
+        full_name: form.full_name,
+        username: form.username,
+        bio: form.bio,
+        location: form.location,
+      })
       .eq('id', user.id)
 
     if (!error) {
@@ -79,15 +81,15 @@ export default function ProviderProfile() {
     return name.split(' ').map((p) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
   }
 
-  if (loading) {
+if (loading) {
     return <View style={styles.center}><ActivityIndicator color="#ff5a1f" /></View>
   }
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <Text style={styles.title}>Profile</Text>
 
-      {/* User card */}
       <View style={styles.userCard}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials(form.full_name || 'P')}</Text>
@@ -98,54 +100,32 @@ export default function ProviderProfile() {
         </View>
       </View>
 
-      {/* Listing form */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Your listing</Text>
         <Text style={styles.cardSubtitle}>Changes here update what clients see on the feed.</Text>
 
-        <Field label="Display name">
-          <TextInput
-            style={styles.input}
-            value={form.full_name}
-            onChangeText={(v) => setForm({ ...form, full_name: v })}
-            placeholder="Your name"
-            placeholderTextColor="#999"
-          />
-        </Field>
+        {[
+          { label: 'Display name', key: 'full_name', placeholder: 'Your name' },
+          { label: 'Username', key: 'username', placeholder: '@handle', lower: true },
+          { label: 'Business name', key: 'business_name', placeholder: 'Your business name' },
+          { label: 'Category', key: 'category', placeholder: 'hair, nails, pt, driving...', lower: true },
+          { label: 'Location', key: 'location', placeholder: 'e.g. North London' },
+        ].map((field) => (
+          <View key={field.key} style={styles.field}>
+            <Text style={styles.fieldLabel}>{field.label}</Text>
+            <TextInput
+              style={styles.input}
+              value={form[field.key as keyof typeof form]}
+              onChangeText={(v) => setForm({ ...form, [field.key]: v })}
+              placeholder={field.placeholder}
+              placeholderTextColor="#999"
+              autoCapitalize={field.lower ? 'none' : 'words'}
+            />
+          </View>
+        ))}
 
-        <Field label="Username">
-          <TextInput
-            style={styles.input}
-            value={form.username}
-            onChangeText={(v) => setForm({ ...form, username: v })}
-            placeholder="@handle"
-            placeholderTextColor="#999"
-            autoCapitalize="none"
-          />
-        </Field>
-
-        <Field label="Business name">
-          <TextInput
-            style={styles.input}
-            value={form.business_name}
-            onChangeText={(v) => setForm({ ...form, business_name: v })}
-            placeholder="Your business name"
-            placeholderTextColor="#999"
-          />
-        </Field>
-
-        <Field label="Category">
-          <TextInput
-            style={styles.input}
-            value={form.category}
-            onChangeText={(v) => setForm({ ...form, category: v })}
-            placeholder="hair, nails, pt, driving..."
-            placeholderTextColor="#999"
-            autoCapitalize="none"
-          />
-        </Field>
-
-        <Field label="Bio">
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Bio</Text>
           <TextInput
             style={[styles.input, styles.multiline]}
             value={form.bio}
@@ -155,17 +135,7 @@ export default function ProviderProfile() {
             multiline
             numberOfLines={3}
           />
-        </Field>
-
-        <Field label="Location">
-          <TextInput
-            style={styles.input}
-            value={form.location}
-            onChangeText={(v) => setForm({ ...form, location: v })}
-            placeholder="e.g. North London"
-            placeholderTextColor="#999"
-          />
-        </Field>
+        </View>
 
         <TouchableOpacity style={styles.saveBtn} onPress={save} disabled={saving}>
           {saving ? (
@@ -179,13 +149,9 @@ export default function ProviderProfile() {
         </TouchableOpacity>
       </View>
 
-      {/* Links */}
       <View style={styles.links}>
-        <TouchableOpacity style={styles.linkBtn} onPress={() => router.push('/provider/calendar' as any)}>
-          <Text style={styles.linkBtnText}>Manage availability & pricing per slot</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.linkBtn} onPress={() => router.replace('/(tabs)')}>
-          <Text style={styles.linkBtnText}>Switch to client view</Text>
+          <Text style={styles.linkBtnText}>Switch to customer view</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.linkBtn, styles.signOutBtn]} onPress={signOut}>
           <LogOut size={16} color="#e00" />
@@ -193,14 +159,7 @@ export default function ProviderProfile() {
         </TouchableOpacity>
       </View>
     </ScrollView>
-  )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {children}
+    <ProviderNav />
     </View>
   )
 }

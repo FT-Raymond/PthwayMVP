@@ -1,19 +1,42 @@
-import { Tabs } from 'expo-router'
-import { Home, Search, PlusSquare, MessageCircle, User } from 'lucide-react-native'
+import { useEffect, useState } from 'react'
+import { Stack, useRouter, useSegments } from 'expo-router'
+import { StatusBar } from 'expo-status-bar'
+import { supabase } from '@/lib/supabase'
+import { Session } from '@supabase/supabase-js'
 
-export default function TabsLayout() {
+export default function RootLayout() {
+  const [session, setSession] = useState<Session | null>(null)
+  const [initialized, setInitialized] = useState(false)
+  const segments = useSegments()
+  const router = useRouter()
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setInitialized(true)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!initialized) return
+    const inAuthGroup = segments[0] === '(auth)'
+    if (!session && !inAuthGroup) {
+      router.replace('/(auth)/login')
+    } else if (session && inAuthGroup) {
+      router.replace('/(tabs)')
+    }
+  }, [session, initialized])
+
   return (
-    <Tabs screenOptions={{
-      headerShown: false,
-      tabBarStyle: { backgroundColor: '#000', borderTopColor: '#111' },
-      tabBarActiveTintColor: '#ff5a1f',
-      tabBarInactiveTintColor: '#555',
-    }}>
-      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <Home size={24} color={color} /> }} />
-      <Tabs.Screen name="search" options={{ title: 'Search', tabBarIcon: ({ color }) => <Search size={24} color={color} /> }} />
-      <Tabs.Screen name="create" options={{ title: 'Create', tabBarIcon: ({ color }) => <PlusSquare size={24} color={color} /> }} />
-      <Tabs.Screen name="messages" options={{ title: 'Messages', tabBarIcon: ({ color }) => <MessageCircle size={24} color={color} /> }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <User size={24} color={color} /> }} />
-    </Tabs>
+    <>
+      <StatusBar style="light" />
+      <Stack screenOptions={{ headerShown: false }} />
+    </>
   )
 }

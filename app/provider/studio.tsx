@@ -1,17 +1,17 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Dimensions, ActivityIndicator,
+  ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '@/lib/supabase'
-import { useEffect } from 'react'
+import { ProviderNav } from '@/components/ProviderNav'
 import {
-  Plus, X, UserPlus, Link2, Pencil, Activity, ChevronRight,
-  Zap, TrendingUp, Calendar, PoundSterling, Users, Star, ShoppingBag,
+  Zap, ChevronRight, TrendingUp, Calendar,
+  PoundSterling, Users, Star, ShoppingBag,
+  Plus, X, UserPlus, Link2, Pencil, Activity,
 } from 'lucide-react-native'
 
-const { width } = Dimensions.get('window')
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function initials(name: string) {
@@ -26,26 +26,62 @@ function timeAgo(iso: string) {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
+function StatTile({ icon, label, value, sub, stars }: {
+  icon: React.ReactNode; label: string; value: string; sub: string; stars?: boolean
+}) {
+  return (
+    <View style={styles.statTile}>
+      <View style={styles.statTileHeader}>{icon}<Text style={styles.statTileLabel}>{label}</Text></View>
+      <Text style={styles.statTileValue}>{value}</Text>
+      <Text style={styles.statTileSub}>{sub}</Text>
+      {stars && (
+        <View style={styles.stars}>
+          {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={7} color="#ff5a1f" fill="#ff5a1f" />)}
+        </View>
+      )}
+    </View>
+  )
+}
+
+function QuickAction({ icon, label, onPress }: { icon: React.ReactNode; label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.quickAction} onPress={onPress}>
+      {icon}
+      <Text style={styles.quickActionLabel}>{label}</Text>
+    </TouchableOpacity>
+  )
+}
+
 export default function StudioPage() {
   const [fabOpen, setFabOpen] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [displayName, setDisplayName] = useState('there')
   const [bookings, setBookings] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser()
     setUser(user)
 
+    // Get name from profiles table
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single()
+      if (profile?.full_name) setDisplayName(profile.full_name.split(' ')[0])
+    }
+
     const start = new Date()
     start.setDate(start.getDate() - 60)
     const { data } = await supabase
       .from('bookings')
-      .select('id, customer_id, starts_at, status, amount_paid, note, created_at')
+      .select('id, customer_id, starts_at, status, amount_paid, created_at')
+      .eq('provider_id', user?.id)
       .gte('starts_at', start.toISOString())
       .order('starts_at', { ascending: false })
 
@@ -53,16 +89,13 @@ export default function StudioPage() {
       const ids = Array.from(new Set(data.map((b: any) => b.customer_id)))
       const names = new Map<string, string>()
       if (ids.length) {
-        const { data: profiles } = await supabase
-          .from('profiles').select('id, full_name').in('id', ids)
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', ids)
         ;(profiles ?? []).forEach((p: any) => names.set(p.id, p.full_name ?? 'Client'))
       }
       setBookings(data.map((b: any) => ({ ...b, client_name: names.get(b.customer_id) ?? 'Client' })))
     }
     setLoading(false)
   }
-
-  const displayName = user?.user_metadata?.full_name?.split(' ')[0] ?? 'there'
 
   const stats = useMemo(() => {
     const active = bookings.filter((b) => b.status !== 'cancelled')
@@ -80,10 +113,9 @@ export default function StudioPage() {
       const d = new Date(weekStart)
       d.setDate(weekStart.getDate() + i)
       const key = d.toDateString()
-      const value = active
-        .filter((b) => new Date(b.starts_at).toDateString() === key)
+      const value = active.filter((b) => new Date(b.starts_at).toDateString() === key)
         .reduce((s: number, b: any) => s + (b.amount_paid ?? 0), 0)
-      return { day, value, isToday: d.toDateString() === now.toDateString() }
+      return { day, value }
     })
     const clientCount = new Set(active.map((b: any) => b.customer_id)).size
     const pending = active.filter((b) => b.status === 'pending').length
@@ -94,9 +126,7 @@ export default function StudioPage() {
   const peakIndex = stats.week.reduce((max, d, i, a) => (d.value > a[max].value ? i : max), 0)
   const recent = bookings.slice(0, 4)
 
-  if (loading) {
-    return <View style={styles.center}><ActivityIndicator color="#ff5a1f" /></View>
-  }
+  if (loading) return <View style={styles.center}><ActivityIndicator color="#ff5a1f" /></View>
 
   return (
     <View style={styles.container}>
@@ -108,22 +138,20 @@ export default function StudioPage() {
             <Text style={styles.greetingSub}>Welcome back!</Text>
             <Text style={styles.greetingName}>Hi, {displayName} 👋</Text>
           </View>
-          <TouchableOpacity style={styles.avatar} onPress={() => router.push('/provider/profile')}>
+          <TouchableOpacity style={styles.avatar}>
             <Text style={styles.avatarText}>{initials(displayName)}</Text>
             {stats.pending > 0 && <View style={styles.badge} />}
           </TouchableOpacity>
         </View>
 
-        {/* Stay Booked banner */}
-        <TouchableOpacity style={styles.banner} onPress={() => router.push('/provider/bookings')}>
-          <View style={styles.bannerIcon}>
-            <Zap size={22} color="#fff" fill="#fff" strokeWidth={1.5} />
-          </View>
+        {/* Banner */}
+        <TouchableOpacity style={styles.banner} onPress={() => router.push('/provider/bookings' as any)}>
+          <View style={styles.bannerIcon}><Zap size={22} color="#fff" fill="#fff" strokeWidth={1.5} /></View>
           <View style={styles.bannerText}>
             <Text style={styles.bannerTitle}>Stay Booked</Text>
             <Text style={styles.bannerSub}>
               {stats.pending > 0
-                ? `${stats.pending} new booking request${stats.pending === 1 ? '' : 's'} need a reply`
+                ? `${stats.pending} booking request${stats.pending === 1 ? '' : 's'} need a reply`
                 : 'All caught up — keep your calendar fresh'}
             </Text>
           </View>
@@ -136,7 +164,7 @@ export default function StudioPage() {
           <View style={styles.weekBadge}><Text style={styles.weekBadgeText}>This week</Text></View>
         </View>
 
-        {/* 4 stat tiles */}
+        {/* Stat tiles */}
         <View style={styles.statGrid}>
           <StatTile icon={<Calendar size={14} color="#ff5a1f" />} label="Bookings" value={String(stats.weekBookings)} sub="This week" />
           <StatTile icon={<PoundSterling size={14} color="#ff5a1f" />} label="Earnings" value={`£${stats.weekEarnings.toFixed(0)}`} sub="This week" />
@@ -151,10 +179,6 @@ export default function StudioPage() {
               <TrendingUp size={15} color="#ff5a1f" />
               <Text style={styles.earningsHeaderText}>Earnings</Text>
             </View>
-            <TouchableOpacity style={styles.earningsHeaderRight}>
-              <Text style={styles.earningsHeaderRightText}>View breakdown</Text>
-              <ChevronRight size={13} color="rgba(255,255,255,0.8)" />
-            </TouchableOpacity>
           </View>
           <View style={styles.earningsNumbers}>
             <View>
@@ -167,8 +191,6 @@ export default function StudioPage() {
               <Text style={styles.earningsSub}>Bookings</Text>
             </View>
           </View>
-
-          {/* Bar chart */}
           <View style={styles.chart}>
             {stats.week.map((d, i) => {
               const isPeak = i === peakIndex && d.value > 0
@@ -180,10 +202,7 @@ export default function StudioPage() {
                       <Text style={styles.peakLabelText}>£{d.value.toFixed(0)}</Text>
                     </View>
                   )}
-                  <View style={[
-                    styles.bar,
-                    { height: `${heightPct}%`, backgroundColor: isPeak ? '#ff5a1f' : 'rgba(255,255,255,0.15)' },
-                  ]} />
+                  <View style={[styles.bar, { height: `${heightPct}%` as any, backgroundColor: isPeak ? '#ff5a1f' : 'rgba(255,255,255,0.15)' }]} />
                   <Text style={styles.chartDay}>{d.day}</Text>
                 </View>
               )
@@ -193,16 +212,16 @@ export default function StudioPage() {
 
         {/* Quick actions */}
         <View style={styles.quickGrid}>
-          <QuickAction icon={<Calendar size={20} color="#ff5a1f" />} label="Calendar" onPress={() => router.push('/provider/calendar')} />
-          <QuickAction icon={<ShoppingBag size={20} color="#ff5a1f" />} label="Services" onPress={() => router.push('/provider/profile')} />
-          <QuickAction icon={<Users size={20} color="#ff5a1f" />} label="Clients" onPress={() => router.push('/provider/clients')} />
-          <QuickAction icon={<Star size={20} color="#ff5a1f" />} label="Reviews" onPress={() => router.push('/provider/bookings')} />
+          <QuickAction icon={<Calendar size={20} color="#ff5a1f" />} label="Calendar" onPress={() => router.push('/provider/calendar' as any)} />
+          <QuickAction icon={<ShoppingBag size={20} color="#ff5a1f" />} label="Services" onPress={() => router.push('/provider/profile' as any)} />
+          <QuickAction icon={<Users size={20} color="#ff5a1f" />} label="Clients" onPress={() => router.push('/provider/clients' as any)} />
+          <QuickAction icon={<Star size={20} color="#ff5a1f" />} label="Reviews" onPress={() => router.push('/provider/bookings' as any)} />
         </View>
 
         {/* Recent activity */}
         <View style={styles.recentHeader}>
           <Text style={styles.sectionTitle}>Recent activity</Text>
-          <TouchableOpacity onPress={() => router.push('/provider/bookings')}>
+          <TouchableOpacity onPress={() => router.push('/provider/bookings' as any)}>
             <Text style={styles.viewAll}>View all</Text>
           </TouchableOpacity>
         </View>
@@ -220,12 +239,8 @@ export default function StudioPage() {
                   <View style={[styles.recentDot, { backgroundColor: b.status === 'pending' ? '#ff5a1f' : '#10b981' }]} />
                 </View>
                 <View style={styles.recentInfo}>
-                  <Text style={styles.recentTitle}>
-                    {b.status === 'pending' ? 'New booking request' : 'Booking confirmed'}
-                  </Text>
-                  <Text style={styles.recentSub}>
-                    {new Date(b.starts_at).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
-                  </Text>
+                  <Text style={styles.recentTitle}>{b.status === 'pending' ? 'New booking request' : 'Booking confirmed'}</Text>
+                  <Text style={styles.recentSub}>{new Date(b.starts_at).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</Text>
                 </View>
                 <View style={styles.recentRight}>
                   <Text style={styles.recentTime}>{timeAgo(b.created_at)}</Text>
@@ -237,10 +252,11 @@ export default function StudioPage() {
         )}
       </ScrollView>
 
+      {/* Provider Nav */}
+      <ProviderNav />
+
       {/* FAB */}
-      {fabOpen && (
-        <TouchableOpacity style={styles.fabOverlay} onPress={() => setFabOpen(false)} activeOpacity={1} />
-      )}
+      {fabOpen && <TouchableOpacity style={styles.fabOverlay} onPress={() => setFabOpen(false)} activeOpacity={1} />}
       <View style={styles.fabContainer}>
         {fabOpen && (
           <View style={styles.fabActions}>
@@ -251,12 +267,8 @@ export default function StudioPage() {
               { icon: Activity, label: 'Add availability', route: '/provider/calendar' },
             ].map((item, i) => (
               <TouchableOpacity key={i} style={styles.fabAction} onPress={() => { setFabOpen(false); router.push(item.route as any) }}>
-                <View style={styles.fabActionLabel}>
-                  <Text style={styles.fabActionText}>{item.label}</Text>
-                </View>
-                <View style={styles.fabActionIcon}>
-                  <item.icon size={16} color="#111" />
-                </View>
+                <View style={styles.fabActionLabel}><Text style={styles.fabActionText}>{item.label}</Text></View>
+                <View style={styles.fabActionIcon}><item.icon size={16} color="#111" /></View>
               </TouchableOpacity>
             ))}
           </View>
@@ -266,35 +278,6 @@ export default function StudioPage() {
         </TouchableOpacity>
       </View>
     </View>
-  )
-}
-
-function StatTile({ icon, label, value, sub, stars }: { icon: React.ReactNode; label: string; value: string; sub: string; stars?: boolean }) {
-  return (
-    <View style={styles.statTile}>
-      <View style={styles.statTileHeader}>
-        {icon}
-        <Text style={styles.statTileLabel}>{label}</Text>
-      </View>
-      <Text style={styles.statTileValue}>{value}</Text>
-      <Text style={styles.statTileSub}>{sub}</Text>
-      {stars && (
-        <View style={styles.stars}>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Star key={i} size={7} color="#ff5a1f" fill="#ff5a1f" />
-          ))}
-        </View>
-      )}
-    </View>
-  )
-}
-
-function QuickAction({ icon, label, onPress }: { icon: React.ReactNode; label: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={styles.quickAction} onPress={onPress}>
-      {icon}
-      <Text style={styles.quickActionLabel}>{label}</Text>
-    </TouchableOpacity>
   )
 }
 
@@ -319,7 +302,7 @@ const styles = StyleSheet.create({
   weekBadge: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   weekBadgeText: { fontSize: 11, fontWeight: '600', color: '#888' },
   statGrid: { flexDirection: 'row', gap: 8, marginBottom: 20 },
-  statTile: { flex: 1, borderWidth: 1, borderColor: '#f0f0f0', borderRadius: 16, padding: 10, backgroundColor: '#fff' },
+  statTile: { flex: 1, borderWidth: 1, borderColor: '#f0f0f0', borderRadius: 16, padding: 10 },
   statTileHeader: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
   statTileLabel: { fontSize: 9, fontWeight: '600', color: '#111' },
   statTileValue: { fontSize: 18, fontWeight: '700', letterSpacing: -0.5 },
@@ -329,8 +312,6 @@ const styles = StyleSheet.create({
   earningsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   earningsHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   earningsHeaderText: { fontSize: 14, fontWeight: '600', color: '#fff' },
-  earningsHeaderRight: { flexDirection: 'row', alignItems: 'center' },
-  earningsHeaderRightText: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
   earningsNumbers: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 20 },
   earningsBig: { fontSize: 28, fontWeight: '700', color: '#fff', letterSpacing: -0.5 },
   earningsSub: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 6 },
@@ -346,9 +327,9 @@ const styles = StyleSheet.create({
   quickActionLabel: { fontSize: 11, fontWeight: '600' },
   recentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   viewAll: { fontSize: 12, fontWeight: '600', color: '#ff5a1f' },
-  emptyBox: { borderWidth: 1, borderColor: '#f0f0f0', borderRadius: 16, padding: 24, alignItems: 'center', borderStyle: 'dashed' },
+  emptyBox: { borderWidth: 1, borderColor: '#f0f0f0', borderRadius: 16, padding: 24, alignItems: 'center' },
   emptyText: { fontSize: 14, color: '#888' },
-  recentCard: { borderWidth: 1, borderColor: '#f0f0f0', borderRadius: 16, backgroundColor: '#fff' },
+  recentCard: { borderWidth: 1, borderColor: '#f0f0f0', borderRadius: 16 },
   recentRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   recentRowBorder: { borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   recentAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
@@ -364,8 +345,8 @@ const styles = StyleSheet.create({
   fabContainer: { position: 'absolute', bottom: 100, right: 20, zIndex: 50, alignItems: 'flex-end', gap: 10 },
   fabActions: { gap: 8, alignItems: 'flex-end' },
   fabAction: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  fabActionLabel: { backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#f0f0f0', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  fabActionLabel: { backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#f0f0f0' },
   fabActionText: { fontSize: 13, fontWeight: '500' },
-  fabActionIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#f0f0f0', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
-  fab: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#ff5a1f', justifyContent: 'center', alignItems: 'center', shadowColor: '#ff5a1f', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+  fabActionIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#f0f0f0' },
+  fab: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#ff5a1f', justifyContent: 'center', alignItems: 'center' },
 })

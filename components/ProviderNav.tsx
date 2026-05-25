@@ -3,8 +3,7 @@ import { useRouter, usePathname } from 'expo-router'
 import { LayoutDashboard, Calendar, ClipboardList, Users, User } from 'lucide-react-native'
 
 const items = [
-  { route: '/studio', label: 'Studio', icon: LayoutDashboard },
-  { route: '/provider/calendar', label: 'Calendar', icon: Calendar },
+  { route: '/provider/studio', label: 'Studio', icon: LayoutDashboard },
   { route: '/provider/bookings', label: 'Bookings', icon: ClipboardList },
   { route: '/provider/clients', label: 'Clients', icon: Users },
   { route: '/provider/profile', label: 'Profile', icon: User },
@@ -26,11 +25,7 @@ export function ProviderNav() {
               style={styles.navItem}
               onPress={() => router.push(item.route as any)}
             >
-              <Icon
-                size={20}
-                color={isActive ? '#ff5a1f' : '#999'}
-                strokeWidth={isActive ? 2.2 : 1.7}
-              />
+              <Icon size={22} color={isActive ? '#ff5a1f' : '#999'} strokeWidth={isActive ? 2.2 : 1.7} />
               <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
                 {item.label}
               </Text>
@@ -39,7 +34,7 @@ export function ProviderNav() {
         })}
       </View>
       <TouchableOpacity style={styles.switchBtn} onPress={() => router.replace('/(tabs)')}>
-        <Text style={styles.switchText}>← Switch to client</Text>
+        <Text style={styles.switchText}>← Switch to customer view</Text>
       </TouchableOpacity>
     </View>
   )
@@ -50,11 +45,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
+    paddingBottom: 20,
   },
   nav: {
     flexDirection: 'row',
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   navItem: {
     flex: 1,
@@ -72,11 +68,11 @@ const styles = StyleSheet.create({
   },
   switchBtn: {
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingBottom: 4,
     alignItems: 'center',
   },
   switchText: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#bbb',
   },
 })
