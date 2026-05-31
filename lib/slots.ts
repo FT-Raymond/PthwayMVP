@@ -1,7 +1,15 @@
-export type Slot = {
-  start: string // "HH:MM"
-  end: string
-  available: boolean
+type BookedSlot = { start: string; end: string }
+type Slot = { start: string; end: string; available: boolean }
+
+function toMins(time: string) {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+function fromMins(mins: number) {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
 export function generateSlots({
@@ -9,54 +17,26 @@ export function generateSlots({
   workEnd,
   durationMins,
   bufferMins = 0,
-  bookedSlots, // array of { start: "HH:MM", end: "HH:MM" }
+  bookedSlots = [],
 }: {
   workStart: string
   workEnd: string
   durationMins: number
   bufferMins?: number
-  bookedSlots: { start: string; end: string }[]
+  bookedSlots?: BookedSlot[]
 }): Slot[] {
   const slots: Slot[] = []
+  const end = toMins(workEnd)
+  const step = durationMins + bufferMins
 
-  function toMins(time: string) {
-    const [h, m] = time.split(':').map(Number)
-    return h * 60 + m
-  }
-
-  function toTime(mins: number) {
-    const h = Math.floor(mins / 60)
-    const m = mins % 60
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-  }
-
-  function overlaps(startA: number, endA: number, startB: number, endB: number) {
-    return startA < endB && endA > startB
-  }
-
-  const workStartMins = toMins(workStart)
-  const workEndMins = toMins(workEnd)
-  const totalSlot = durationMins + bufferMins
-
-  let cursor = workStartMins
-
-  while (cursor + durationMins <= workEndMins) {
-    const slotStart = cursor
-    const slotEnd = cursor + durationMins
-
-    const isBooked = bookedSlots.some(b => {
-      const bStart = toMins(b.start)
-      const bEnd = toMins(b.end)
-      return overlaps(slotStart, slotEnd + bufferMins, bStart, bEnd)
+  for (let cur = toMins(workStart); cur + durationMins <= end; cur += step) {
+    const slotEnd = cur + durationMins
+    const available = !bookedSlots.some(b => {
+      const bs = toMins(b.start)
+      const be = toMins(b.end)
+      return cur < be && slotEnd > bs
     })
-
-    slots.push({
-      start: toTime(slotStart),
-      end: toTime(slotEnd),
-      available: !isBooked,
-    })
-
-    cursor += totalSlot
+    slots.push({ start: fromMins(cur), end: fromMins(slotEnd), available })
   }
 
   return slots
@@ -64,7 +44,7 @@ export function generateSlots({
 
 export function formatSlotTime(time: string) {
   const [h, m] = time.split(':').map(Number)
-  const ap = h >= 12 ? 'PM' : 'AM'
-  const h12 = h % 12 || 12
-  return `${h12}:${String(m).padStart(2, '0')} ${ap}`
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour = h % 12 || 12
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`
 }
