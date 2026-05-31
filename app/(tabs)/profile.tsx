@@ -12,7 +12,7 @@ const { width } = Dimensions.get('window')
 
 export default function ProfileScreen() {
   const router = useRouter()
-  const [showProviderModal, setShowProviderModal] = useState(false)
+  const [setShowProviderModal] = useState(false)
   const [profile, setProfile] = useState<any>(null)
 
   useEffect(() => { loadProfile() }, [])
@@ -121,7 +121,20 @@ export default function ProfileScreen() {
   <TouchableOpacity
     activeOpacity={0.9}
     style={styles.providerCard}
-    onPress={() => setShowProviderModal(true)}
+    onPress={async () => {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  const { data } = await supabase
+    .from('provider_profiles')
+    .select('id')
+    .eq('id', user.id)
+    .single()
+  if (data) {
+    router.push('/provider/studio' as any)
+  } else {
+    router.push('/onboarding/provider' as any)
+  }
+}}
   >
     <View style={styles.providerGlow} />
     <View>
@@ -159,14 +172,6 @@ export default function ProfileScreen() {
 
       </ScrollView>
 
-      <BecomeProviderModal
-        visible={showProviderModal}
-        onClose={() => setShowProviderModal(false)}
-        onContinue={() => {
-          setShowProviderModal(false)
-          router.push('/onboarding/provider' as any)
-        }}
-      />
     </SafeAreaView>
   )
 }

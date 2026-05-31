@@ -1,11 +1,12 @@
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native'
 import { useRouter, usePathname } from 'expo-router'
-import { LayoutDashboard, Calendar, ClipboardList, Users, User } from 'lucide-react-native'
+import { Home, Calendar, Plus, MessageCircle, User } from 'lucide-react-native'
 
 const items = [
-  { route: '/provider/studio', label: 'Studio', icon: LayoutDashboard },
-  { route: '/provider/bookings', label: 'Bookings', icon: ClipboardList },
-  { route: '/provider/clients', label: 'Clients', icon: Users },
+  { route: '/provider/studio', label: 'Home', icon: Home },
+  { route: '/provider/calendar', label: 'Calendar', icon: Calendar },
+  { route: '/provider/create-post', label: 'Post', icon: Plus },
+  { route: '/provider/messages', label: 'Messages', icon: MessageCircle },
   { route: '/provider/profile', label: 'Profile', icon: User },
 ]
 
@@ -15,64 +16,53 @@ export function ProviderNav() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.nav}>
-        {items.map((item) => {
-          const isActive = pathname === item.route
-          const Icon = item.icon
-          return (
-            <TouchableOpacity
-              key={item.label}
-              style={styles.navItem}
-              onPress={() => router.push(item.route as any)}
-            >
-              <Icon size={22} color={isActive ? '#ff5a1f' : '#999'} strokeWidth={isActive ? 2.2 : 1.7} />
-              <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
-      </View>
-      <TouchableOpacity style={styles.switchBtn} onPress={() => router.replace('/(tabs)')}>
-        <Text style={styles.switchText}>← Switch to customer view</Text>
-      </TouchableOpacity>
+      {items.map((item) => {
+        const isActive = pathname === item.route
+        const Icon = item.icon
+        return (
+          <TouchableOpacity
+            key={item.label}
+            style={styles.navItem}
+            onPress={() => router.push(item.route as any)}
+            activeOpacity={0.7}
+          >
+            <Icon
+              size={22}
+              color={isActive ? '#111' : '#777'}
+              strokeWidth={isActive ? 2.3 : 1.8}
+            />
+            <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        )
+      })}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
+    flexDirection: 'row',
     backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingBottom: 20,
-  },
-  nav: {
-    flexDirection: 'row',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
+    borderTopColor: '#eee',
+    paddingTop: 8,
+    paddingBottom: 18,
+    paddingHorizontal: 4,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
+    justifyContent: 'center',
+    gap: 3,
   },
   navLabel: {
-    fontSize: 11,
-    color: '#999',
+    fontSize: 10,
+    color: '#777',
   },
   navLabelActive: {
-    color: '#ff5a1f',
-    fontWeight: '600',
-  },
-  switchBtn: {
-    paddingHorizontal: 16,
-    paddingBottom: 4,
-    alignItems: 'center',
-  },
-  switchText: {
-    fontSize: 11,
-    color: '#bbb',
+    color: '#111',
+    fontWeight: '700',
   },
 })

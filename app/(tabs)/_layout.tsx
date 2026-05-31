@@ -23,21 +23,20 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="search"
         options={{
+          href: null,
           title: 'Search',
           tabBarIcon: ({ color }) => <Search size={24} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="create"
+        name="bookings"
         options={{
-          title: '',
-          tabBarIcon: ({ color }) => (
-            <Plus size={24} color={color} />
-          ),
+          title: 'Bookings',
+          tabBarIcon: ({ color }) => <Plus size={24} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="messages"
+        name="message"
         options={{
           title: 'Messages',
           tabBarIcon: ({ color }) => <MessageCircle size={24} color={color} />,

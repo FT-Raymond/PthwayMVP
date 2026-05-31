@@ -117,7 +117,7 @@ return (
               <TouchableOpacity
                 key={b.id}
                 style={styles.bookingCard}
-                onPress={() => router.push(`/booking/${b.id}` as any)}
+                onPress={() => router.push(`/provider/booking-detail?id=${b.id}` as any)}
               >
                 <View style={styles.bookingAvatar}>
                   <Text style={styles.bookingAvatarText}>{initials(b.client_name)}</Text>

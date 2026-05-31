@@ -1,176 +1,118 @@
-import { useEffect, useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import {
   View, FlatList, StyleSheet, Dimensions,
-  ViewToken, Text, TouchableOpacity, Image,
+  ViewToken, ActivityIndicator, Text, TouchableOpacity,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useFocusEffect } from 'expo-router'
 import { supabase } from '@/lib/supabase'
-import { Heart, MapPin, Star, BadgeCheck } from 'lucide-react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { FeedCard, FeedItem } from '@/components/FeedCard'
 
-const { width, height } = Dimensions.get('window')
-
-type FeedItem = {
-  id: string
-  providerId: string
-  name: string
-  handle: string
-  verified?: boolean
-  bio: string | null
-  caption?: string | null
-  location: string | null
-  rating: number
-  rating_count: number
-  service_title: string
-  hashtag: string | null
-  cover_url: string | null
-  video_url?: string | null
-  category?: string | null
-  price_pence?: number | null
-}
-
-function FeedCard({ item, active }: { item: FeedItem; active: boolean }) {
-  const router = useRouter()
-  const [liked, setLiked] = useState(false)
-
-  return (
-    <View style={styles.card}>
-      {item.cover_url ? (
-        <Image
-          source={{ uri: item.cover_url }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, styles.placeholder]} />
-      )}
-
-      {/* Gradient */}
-      <View style={styles.gradient} pointerEvents="none" />
-
-      {/* Overlay */}
-      <View style={styles.overlay}>
-        {/* Provider */}
-        <TouchableOpacity
-          style={styles.providerRow}
-          onPress={() => router.push(`/profile/${item.handle}` as any)}
-        >
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{item.name.slice(0, 1)}</Text>
-          </View>
-          <Text style={styles.handle}>@{item.handle}</Text>
-          {item.verified && (
-            <BadgeCheck size={14} color="#ff5a1f" fill="#ff5a1f" />
-          )}
-        </TouchableOpacity>
-
-        {/* Service + rating */}
-        <View style={styles.titleRow}>
-          <Text style={styles.serviceTitle} numberOfLines={1}>
-            {item.service_title}
-          </Text>
-          <Star size={13} color="#ff5a1f" fill="#ff5a1f" />
-          <Text style={styles.rating}>{item.rating.toFixed(1)}</Text>
-        </View>
-
-        {/* Caption */}
-        <Text style={styles.caption} numberOfLines={2}>
-          {item.caption ?? item.bio ?? ''}
-        </Text>
-
-        {/* Bottom row */}
-        <View style={styles.bottomRow}>
-          {item.category && (
-            <View style={styles.pill}>
-              <Text style={styles.pillText}>{item.category}</Text>
-            </View>
-          )}
-          {item.location && (
-            <View style={styles.locationPill}>
-              <MapPin size={10} color="#fff" fill="#fff" />
-              <Text style={styles.locationText} numberOfLines={1}>
-                {item.location}
-              </Text>
-            </View>
-          )}
-          <TouchableOpacity
-            style={styles.bookBtn}
-            onPress={() => router.push(`/book/${item.providerId}/calendar` as any)}
-          >
-            <Text style={styles.bookBtnText}>Book Now</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Like button */}
-      <TouchableOpacity
-        style={styles.likeBtn}
-        onPress={() => setLiked(l => !l)}
-      >
-        <Heart
-          size={28}
-          color={liked ? '#ff5a1f' : '#fff'}
-          fill={liked ? '#ff5a1f' : 'transparent'}
-        />
-      </TouchableOpacity>
-    </View>
-  )
-}
+const { height } = Dimensions.get('window')
 
 export default function FeedScreen() {
   const [items, setItems] = useState<FeedItem[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
-  useEffect(() => { loadFeed() }, [])
+  useFocusEffect(useCallback(() => {
+    loadFeed()
+    return () => { setActiveIndex(-1) }
+  }, []))
 
   async function loadFeed() {
-    const { data } = await supabase
-      .from('opportunities')
-      .select(`
-        id,
-        provider_id,
-        title,
-        description,
-        category,
-        price_pence,
-        location,
-        profiles!opportunities_provider_id_fkey(
-          id, full_name, username, bio
-        ),
-        opportunity_media(url, media_type)
-      `)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(20)
+    setError(false)
+    try {
+      const { data: posts, error: postsError } = await supabase
+        .from('posts')
+        .select('id, provider_id, caption, media_url, media_type, media_urls, category, location')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(30)
 
-    if (data) {
-      setItems(data.map((o: any) => ({
-        id: o.id,
-        providerId: o.provider_id,
-        name: o.profiles?.full_name ?? 'Provider',
-        handle: o.profiles?.username ?? o.provider_id.slice(0, 8),
-        bio: o.profiles?.bio ?? null,
-        caption: o.description,
-        location: o.location,
-        rating: 4.9,
-        rating_count: 0,
-        service_title: o.title,
-        hashtag: o.category,
-        cover_url: o.opportunity_media?.[0]?.url ?? null,
-        video_url: o.opportunity_media?.find((m: any) => m.media_type === 'video')?.url ?? null,
-        category: o.category,
-        price_pence: o.price_pence,
-      })))
+      if (postsError) throw postsError
+      if (!posts || posts.length === 0) { setItems([]); setLoading(false); return }
+
+      const providerIds = [...new Set(posts.map((p: any) => p.provider_id))]
+
+      // Fetch profiles + provider_profiles for category/bio
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, username, bio')
+        .in('id', providerIds)
+
+      const { data: providerProfiles } = await supabase
+        .from('provider_profiles')
+        .select('id, category, business_name')
+        .in('id', providerIds)
+
+      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]))
+      const providerMap = new Map((providerProfiles ?? []).map((p: any) => [p.id, p]))
+
+      setItems(posts.map((p: any) => {
+        const profile = profileMap.get(p.provider_id)
+        const provider = providerMap.get(p.provider_id)
+        const isVideo = p.media_type === 'video'
+        const mediaUrls: string[] = p.media_urls ?? []
+
+        // serviceTitle priority: post category > provider category > provider name
+        const serviceTitle =
+          p.category ||
+          provider?.category ||
+          provider?.business_name ||
+          profile?.full_name ||
+          'Service'
+
+        return {
+          id: p.id,
+          providerId: p.provider_id,
+          name: profile?.full_name ?? 'Provider',
+          handle: profile?.username ?? p.provider_id.slice(0, 8),
+          bio: profile?.bio ?? null,
+          caption: p.caption ?? null,
+          location: p.location ?? null,
+          rating: 4.9,
+          ratingCount: 0,
+          serviceTitle,
+          category: p.category ?? provider?.category ?? null,
+          coverUrl: isVideo ? null : (mediaUrls[0] ?? p.media_url ?? null),
+          videoUrl: isVideo ? (p.media_url ?? null) : null,
+          mediaUrls: !isVideo && mediaUrls.length > 1 ? mediaUrls : null,
+          verified: false,
+        } as FeedItem
+      }))
+    } catch (err) {
+      console.error('Feed error:', err)
+      setError(true)
     }
+    setLoading(false)
   }
 
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    if (viewableItems.length > 0) {
-      setActiveIndex(viewableItems[0].index ?? 0)
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems.length > 0) setActiveIndex(viewableItems[0].index ?? 0)
     }
-  }).current
+  ).current
+
+  if (loading) return (
+    <View style={s.center}>
+      <ActivityIndicator color="#ff5a1f" size="large" />
+    </View>
+  )
+
+  if (error) return (
+    <View style={s.center}>
+      <Ionicons name="wifi-outline" size={48} color="#333" />
+      <Text style={s.errorText}>Couldn't load feed</Text>
+      <TouchableOpacity style={s.retryBtn} onPress={loadFeed}>
+        <Text style={s.retryText}>Try again</Text>
+      </TouchableOpacity>
+    </View>
+  )
 
   return (
-    <View style={styles.container}>
+    <View style={s.container}>
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
@@ -183,11 +125,15 @@ export default function FeedScreen() {
         snapToAlignment="start"
         decelerationRate="fast"
         onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
+        viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+        getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
+        windowSize={3}
+        maxToRenderPerBatch={2}
+        initialNumToRender={1}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>No posts yet.</Text>
-            <Text style={styles.emptySub}>Providers will appear here once they post.</Text>
+          <View style={s.center}>
+            <Ionicons name="videocam-outline" size={48} color="#333" />
+            <Text style={s.errorText}>No posts yet</Text>
           </View>
         }
       />
@@ -195,111 +141,10 @@ export default function FeedScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  card: { width, height, backgroundColor: '#111' },
-  placeholder: { backgroundColor: '#1a1a1a' },
-  gradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: height * 0.6,
-    backgroundColor: 'transparent',
-  },
-  overlay: {
-    position: 'absolute',
-    bottom: 100,
-    left: 16,
-    right: 60,
-  },
-  providerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#ff5a1f',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  avatarText: { fontSize: 12, fontWeight: '600', color: '#fff' },
-  handle: { fontSize: 13, fontWeight: '600', color: '#fff' },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  serviceTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: -0.5,
-    flex: 1,
-  },
-  rating: { fontSize: 13, fontWeight: '600', color: '#fff' },
-  caption: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.9)',
-    lineHeight: 20,
-    marginBottom: 14,
-  },
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  pill: {
-    height: 28,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'center',
-  },
-  pillText: { fontSize: 10, fontWeight: '600', color: '#ff5a1f' },
-  locationPill: {
-    height: 28,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    maxWidth: 120,
-  },
-  locationText: { fontSize: 10, color: '#fff' },
-  bookBtn: {
-    height: 38,
-    borderRadius: 9,
-    backgroundColor: '#ff5a1f',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    shadowColor: '#ff5a1f',
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  bookBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
-  likeBtn: {
-    position: 'absolute',
-    right: 16,
-    bottom: 200,
-  },
-  empty: {
-    height,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  emptySub: { fontSize: 14, color: '#666', marginTop: 8 },
+  center: { flex: 1, height, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', gap: 14 },
+  errorText: { fontSize: 16, color: '#fff', fontWeight: '600' },
+  retryBtn: { backgroundColor: '#ff5a1f', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
+  retryText: { fontSize: 14, color: '#fff', fontWeight: '600' },
 })
