@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, ChevronRight, X, Search,
   Calendar, CalendarDays, LayoutGrid, AlignJustify, Plus, Clock,
+  Trash2, SlidersHorizontal, Palmtree, Check,
 } from 'lucide-react-native'
 import { getCache, setCache } from '@/lib/cache'
 import { ProviderNav } from '@/components/ProviderNav'
@@ -24,6 +25,17 @@ const PAD        = 16
 const MONTHS    = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const DOW_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
 const DOW_LETTER = ['S','M','T','W','T','F','S']
+
+// Day config — used in availability sheet
+const DAY_CONFIG = [
+  { name: 'Monday',    short: 'Mon', dow: 1, chip: '#e8f0fe', chipText: '#1565c0' },
+  { name: 'Tuesday',   short: 'Tue', dow: 2, chip: '#fce4ec', chipText: '#c62828' },
+  { name: 'Wednesday', short: 'Wed', dow: 3, chip: '#e8f5e9', chipText: '#2e7d32' },
+  { name: 'Thursday',  short: 'Thu', dow: 4, chip: '#fff8e1', chipText: '#e65100' },
+  { name: 'Friday',    short: 'Fri', dow: 5, chip: '#ede7f6', chipText: '#4527a0' },
+  { name: 'Saturday',  short: 'Sat', dow: 6, chip: '#fbe9e7', chipText: '#bf360c' },
+  { name: 'Sunday',    short: 'Sun', dow: 0, chip: '#f5f5f5', chipText: '#616161' },
+]
 
 // Muted pastels — calm, not noisy
 const EVENT_COLORS = [
@@ -625,6 +637,264 @@ function MonthGrid({ year, month, today, selectedDate, bookingsByDate, blocked, 
   )
 }
 
+// ── Availability settings sheet ───────────────────────────────────────────────
+function AvailabilitySheet({ visible, onClose, hours, holidays, saving, onToggleDay, onSaveHours, onAddHoliday, onRemoveHoliday }: any) {
+  const [editingDow, setEditingDow] = useState<number | null>(null)
+  const [editStart, setEditStart]   = useState('')
+  const [editEnd, setEditEnd]       = useState('')
+  const [addingOff, setAddingOff]   = useState(false)
+  const [offLabel, setOffLabel]     = useState('')
+  const [offStart, setOffStart]     = useState('')
+  const [offEnd, setOffEnd]         = useState('')
+  const [savingOff, setSavingOff]   = useState(false)
+
+  function openEdit(dow: number, h: any) {
+    setEditStart(h?.start_time ?? '09:00')
+    setEditEnd(h?.end_time ?? '17:00')
+    setEditingDow(dow)
+  }
+
+  async function confirmEdit() {
+    if (editingDow === null) return
+    await onSaveHours(editingDow, editStart, editEnd)
+    setEditingDow(null)
+  }
+
+  async function handleAddOff() {
+    if (!offStart) return
+    setSavingOff(true)
+    await onAddHoliday(offLabel || 'Time off', offStart, offEnd || offStart)
+    setOffLabel(''); setOffStart(''); setOffEnd('')
+    setAddingOff(false)
+    setSavingOff(false)
+  }
+
+  function formatDateRange(start: string, end: string) {
+    const s = new Date(start + 'T12:00:00')
+    const e = new Date((end || start) + 'T12:00:00')
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return start === (end || start) ? fmt(s) : `${fmt(s)} – ${fmt(e)}`
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={av.overlay}>
+        <TouchableOpacity style={av.backdrop} activeOpacity={1} onPress={onClose} />
+        <View style={av.sheet}>
+          <View style={av.handle} />
+
+          {/* Sheet header */}
+          <View style={av.header}>
+            <View style={av.headerIcon}>
+              <SlidersHorizontal size={18} color="#1e88e5" strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={av.headerTitle}>Availability</Text>
+              <Text style={av.headerSub}>Manage your schedule & time off</Text>
+            </View>
+            <TouchableOpacity style={av.closeBtn} onPress={onClose}>
+              <X size={15} color="#888" strokeWidth={2.5} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+
+            {/* ── Weekly schedule card ── */}
+            <View style={av.sectionLabel}>
+              <Text style={av.sectionLabelText}>WEEKLY SCHEDULE</Text>
+            </View>
+
+            <View style={av.card}>
+              {DAY_CONFIG.map((day, i) => {
+                const h      = hours.find((x: any) => x.day_of_week === day.dow)
+                const isOn   = h?.is_active ?? false
+                const isEdit = editingDow === day.dow
+                const isLast = i === DAY_CONFIG.length - 1
+
+                return (
+                  <View key={day.dow}>
+                    <View style={[av.dayRow, !isLast && av.dayRowBorder]}>
+                      {/* Day chip */}
+                      <View style={[av.dayChip, { backgroundColor: isOn ? day.chip : '#f5f5f5' }]}>
+                        <Text style={[av.dayChipText, { color: isOn ? day.chipText : '#ccc' }]}>
+                          {day.short}
+                        </Text>
+                      </View>
+
+                      {/* Day name + hours */}
+                      <View style={{ flex: 1 }}>
+                        <Text style={[av.dayName, !isOn && av.dayNameOff]}>{day.name}</Text>
+                        {isOn && !isEdit && (
+                          <TouchableOpacity onPress={() => openEdit(day.dow, h)} activeOpacity={0.7}>
+                            <Text style={av.dayHours}>
+                              {h?.start_time ?? '09:00'} – {h?.end_time ?? '17:00'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        {!isOn && <Text style={av.dayClosed}>Closed</Text>}
+                      </View>
+
+                      {/* Toggle */}
+                      {saving && editingDow === day.dow
+                        ? <ActivityIndicator size="small" color="#1e88e5" />
+                        : <Switch
+                            value={isOn}
+                            onValueChange={() => onToggleDay(day.dow, h)}
+                            trackColor={{ false: '#e9e9eb', true: '#1e88e5' }}
+                            thumbColor="#fff"
+                            style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                          />
+                      }
+                    </View>
+
+                    {/* Inline time editor */}
+                    {isEdit && (
+                      <View style={av.timeEditor}>
+                        <View style={av.timeEditorInner}>
+                          <View style={av.timeField}>
+                            <Text style={av.timeFieldLabel}>Opens</Text>
+                            <TextInput
+                              style={av.timeFieldInput}
+                              value={editStart}
+                              onChangeText={setEditStart}
+                              keyboardType="numbers-and-punctuation"
+                              maxLength={5}
+                              autoFocus
+                              selectTextOnFocus
+                            />
+                          </View>
+                          <View style={av.timeFieldDivider} />
+                          <View style={av.timeField}>
+                            <Text style={av.timeFieldLabel}>Closes</Text>
+                            <TextInput
+                              style={av.timeFieldInput}
+                              value={editEnd}
+                              onChangeText={setEditEnd}
+                              keyboardType="numbers-and-punctuation"
+                              maxLength={5}
+                              selectTextOnFocus
+                            />
+                          </View>
+                          <TouchableOpacity style={av.timeConfirmBtn} onPress={confirmEdit}>
+                            <Check size={16} color="#fff" strokeWidth={2.5} />
+                          </TouchableOpacity>
+                          <TouchableOpacity style={av.timeCancelBtn} onPress={() => setEditingDow(null)}>
+                            <X size={14} color="#aaa" strokeWidth={2.5} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )
+              })}
+            </View>
+
+            {/* ── Time off & holidays ── */}
+            <View style={av.sectionLabel}>
+              <Text style={av.sectionLabelText}>TIME OFF & HOLIDAYS</Text>
+            </View>
+
+            {holidays.length === 0 && !addingOff && (
+              <View style={av.emptyHolidays}>
+                <Palmtree size={22} color="#e0e0e0" strokeWidth={1.5} />
+                <Text style={av.emptyHolidaysText}>No time off scheduled</Text>
+              </View>
+            )}
+
+            {holidays.map((h: any, i: number) => (
+              <View key={h.id ?? i} style={av.holidayCard}>
+                <View style={av.holidayIconWrap}>
+                  <Palmtree size={16} color="#fb8c00" strokeWidth={1.8} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={av.holidayLabel}>{h.label ?? 'Time off'}</Text>
+                  <Text style={av.holidayRange}>
+                    {formatDateRange(h.date, h.end_date)}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={av.holidayDeleteBtn}
+                  onPress={() => onRemoveHoliday(h)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Trash2 size={14} color="#ccc" strokeWidth={2} />
+                </TouchableOpacity>
+              </View>
+            ))}
+
+            {/* Add time off form */}
+            {addingOff ? (
+              <View style={av.addOffCard}>
+                <Text style={av.addOffTitle}>New time off</Text>
+
+                <View style={av.addOffField}>
+                  <Text style={av.addOffLabel}>Label</Text>
+                  <TextInput
+                    style={av.addOffInput}
+                    value={offLabel}
+                    onChangeText={setOffLabel}
+                    placeholder="e.g. Vacation, Holiday"
+                    placeholderTextColor="#d1d5db"
+                    autoFocus
+                  />
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={[av.addOffField, { flex: 1 }]}>
+                    <Text style={av.addOffLabel}>From</Text>
+                    <TextInput
+                      style={av.addOffInput}
+                      value={offStart}
+                      onChangeText={setOffStart}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="#d1d5db"
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={10}
+                    />
+                  </View>
+                  <View style={[av.addOffField, { flex: 1 }]}>
+                    <Text style={av.addOffLabel}>To</Text>
+                    <TextInput
+                      style={av.addOffInput}
+                      value={offEnd}
+                      onChangeText={setOffEnd}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="#d1d5db"
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={10}
+                    />
+                  </View>
+                </View>
+
+                <View style={av.addOffActions}>
+                  <TouchableOpacity style={av.addOffCancel} onPress={() => { setAddingOff(false); setOffLabel(''); setOffStart(''); setOffEnd('') }}>
+                    <Text style={av.addOffCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[av.addOffSave, (!offStart || savingOff) && { opacity: 0.5 }]}
+                    onPress={handleAddOff} disabled={!offStart || savingOff}>
+                    {savingOff
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Text style={av.addOffSaveText}>Save</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={av.addOffTrigger} onPress={() => setAddingOff(true)} activeOpacity={0.7}>
+                <View style={av.addOffTriggerIcon}>
+                  <Plus size={14} color="#1e88e5" strokeWidth={2.5} />
+                </View>
+                <Text style={av.addOffTriggerText}>Add time off</Text>
+              </TouchableOpacity>
+            )}
+
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ProviderCalendar() {
   const router = useRouter()
@@ -638,6 +908,7 @@ export default function ProviderCalendar() {
   const [monthCursor, setMonthCursor]       = useState({ year: today.getFullYear(), month: today.getMonth() })
   const [sheetDate, setSheetDate]           = useState<string | null>(null)
   const [showFab, setShowFab]               = useState(false)
+  const [showSettings, setShowSettings]     = useState(false)
 
   const [userId, setUserId]   = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -763,6 +1034,39 @@ export default function ProviderCalendar() {
       setBlocked(prev => new Set([...prev, dateStr]))
     }
     setSaving(false)
+  }
+
+  async function toggleDayActive(dayOfWeek: number, h: any) {
+    if (!userId) return
+    setSaving(true)
+    const newActive = !(h?.is_active ?? false)
+    await supabase.from('provider_hours').upsert(
+      { provider_id: userId, day_of_week: dayOfWeek, start_time: h?.start_time ?? '09:00', end_time: h?.end_time ?? '17:00', is_active: newActive },
+      { onConflict: 'provider_id,day_of_week' }
+    )
+    setHours(prev => {
+      const exists = prev.find(x => x.day_of_week === dayOfWeek)
+      if (exists) return prev.map(x => x.day_of_week === dayOfWeek ? { ...x, is_active: newActive } : x)
+      return [...prev, { provider_id: userId, day_of_week: dayOfWeek, start_time: '09:00', end_time: '17:00', is_active: newActive }]
+    })
+    setSaving(false)
+  }
+
+  async function addHoliday(label: string, startDate: string, endDate: string) {
+    if (!userId) return
+    const row = { provider_id: userId, date: startDate, end_date: endDate, label, status: 'blocked', is_recurring: false }
+    const { data } = await supabase.from('provider_availability').insert(row).select().single()
+    if (data) setHolidays(prev => [...prev, data])
+  }
+
+  async function removeHoliday(h: any) {
+    if (!userId) return
+    if (h.id) {
+      await supabase.from('provider_availability').delete().eq('id', h.id)
+    } else {
+      await supabase.from('provider_availability').delete().eq('provider_id', userId).eq('date', h.date)
+    }
+    setHolidays(prev => prev.filter(x => x !== h))
   }
 
   async function saveHours(dayOfWeek: number, startTime: string, endTime: string) {
@@ -992,7 +1296,7 @@ export default function ProviderCalendar() {
           pointerEvents={showFab ? 'auto' : 'none'}
         >
           <TouchableOpacity style={[s.fab, s.fabSecondary]}
-            onPress={() => { setShowFab(false); setSheetDate(selectedDate) }}
+            onPress={() => { setShowFab(false); setShowSettings(true) }}
             activeOpacity={0.85}>
             <Clock size={19} color="#fff" strokeWidth={2} />
           </TouchableOpacity>
@@ -1014,6 +1318,19 @@ export default function ProviderCalendar() {
       </View>
 
       <ProviderNav />
+
+      {/* ── Availability settings sheet ── */}
+      <AvailabilitySheet
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        hours={hours}
+        holidays={holidays}
+        saving={saving}
+        onToggleDay={toggleDayActive}
+        onSaveHours={saveHours}
+        onAddHoliday={addHoliday}
+        onRemoveHoliday={removeHoliday}
+      />
 
       {/* ── Day sheet ── */}
       {sheetDate && sheetStatus && (
@@ -1248,4 +1565,104 @@ const sh = StyleSheet.create({
   bookingTime:       { fontSize: 11, color: '#aaa', marginTop: 2 },
   bookingStatus:     { borderRadius: 20, paddingHorizontal: 9, paddingVertical: 3 },
   bookingStatusText: { fontSize: 10, fontWeight: '700' },
+})
+
+// ── Availability sheet styles ─────────────────────────────────────────────────
+const av = StyleSheet.create({
+  overlay:  { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: {
+    backgroundColor: '#f8f8f8',
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    maxHeight: '92%',
+  },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#e0e0e0', alignSelf: 'center', marginTop: 12, marginBottom: 18 },
+
+  header:     { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 22 },
+  headerIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#e8f0fe', alignItems: 'center', justifyContent: 'center' },
+  headerTitle:{ fontSize: 18, fontWeight: '700', color: '#111', letterSpacing: -0.3 },
+  headerSub:  { fontSize: 12, color: '#aaa', marginTop: 2 },
+  closeBtn:   { width: 30, height: 30, borderRadius: 15, backgroundColor: '#efefef', alignItems: 'center', justifyContent: 'center' },
+
+  sectionLabel:     { marginBottom: 8, marginTop: 4, paddingLeft: 4 },
+  sectionLabelText: { fontSize: 11, fontWeight: '700', color: '#bbb', letterSpacing: 0.8 },
+
+  // Weekly schedule card
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  },
+  dayRow:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
+  dayRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#f3f3f3' },
+
+  dayChip:     { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  dayChipText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.2 },
+
+  dayName:    { fontSize: 15, fontWeight: '600', color: '#111' },
+  dayNameOff: { color: '#ccc' },
+  dayHours:   { fontSize: 12, color: '#1e88e5', marginTop: 2, fontWeight: '500' },
+  dayClosed:  { fontSize: 12, color: '#d1d5db', marginTop: 2 },
+
+  // Inline time editor
+  timeEditor: { backgroundColor: '#f8fbff', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#eef3fb' },
+  timeEditorInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timeField:  { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#e8f0fe' },
+  timeFieldLabel: { fontSize: 9, fontWeight: '700', color: '#1e88e5', letterSpacing: 0.5, marginBottom: 2 },
+  timeFieldInput: { fontSize: 16, fontWeight: '600', color: '#111' },
+  timeFieldDivider: { width: 12, height: 1, backgroundColor: '#d1d5db' },
+  timeConfirmBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#1e88e5', alignItems: 'center', justifyContent: 'center' },
+  timeCancelBtn:  { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center' },
+
+  // Holiday cards
+  emptyHolidays:    { alignItems: 'center', gap: 6, paddingVertical: 20, marginBottom: 12 },
+  emptyHolidaysText:{ fontSize: 13, color: '#d1d5db' },
+
+  holidayCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#fff', borderRadius: 16,
+    padding: 14, marginBottom: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
+  },
+  holidayIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff8e1', alignItems: 'center', justifyContent: 'center' },
+  holidayLabel:    { fontSize: 14, fontWeight: '600', color: '#111' },
+  holidayRange:    { fontSize: 12, color: '#aaa', marginTop: 2 },
+  holidayDeleteBtn:{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#fafafa', alignItems: 'center', justifyContent: 'center' },
+
+  // Add time off trigger
+  addOffTrigger: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#fff', borderRadius: 16, padding: 14,
+    borderWidth: 1.5, borderColor: '#e8f0fe', borderStyle: 'dashed',
+    marginBottom: 24,
+  },
+  addOffTriggerIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#e8f0fe', alignItems: 'center', justifyContent: 'center' },
+  addOffTriggerText: { fontSize: 14, fontWeight: '600', color: '#1e88e5' },
+
+  // Add time off form card
+  addOffCard: {
+    backgroundColor: '#fff', borderRadius: 18, padding: 18, marginBottom: 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 10, elevation: 3,
+  },
+  addOffTitle: { fontSize: 15, fontWeight: '700', color: '#111', marginBottom: 16 },
+  addOffField: { marginBottom: 12 },
+  addOffLabel: { fontSize: 10, fontWeight: '700', color: '#bbb', letterSpacing: 0.6, marginBottom: 6 },
+  addOffInput: {
+    backgroundColor: '#f8f8f8', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 11,
+    fontSize: 14, fontWeight: '500', color: '#111',
+    borderWidth: 1, borderColor: '#f0f0f0',
+  },
+  addOffActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  addOffCancel:  { flex: 1, height: 44, borderRadius: 14, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center' },
+  addOffCancelText: { fontSize: 14, fontWeight: '600', color: '#999' },
+  addOffSave:    { flex: 1, height: 44, borderRadius: 14, backgroundColor: '#1e88e5', alignItems: 'center', justifyContent: 'center' },
+  addOffSaveText:{ fontSize: 14, fontWeight: '700', color: '#fff' },
 })
