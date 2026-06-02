@@ -9,6 +9,9 @@ import { Search, Play, SlidersHorizontal } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { useSearch } from '@/hooks/useSearch'
 
+// Placeholder bg colors for items with no media — warm, muted, on-brand
+const PLACEHOLDER_COLORS = ['#e8f0fe','#fce4ec','#e8f5e9','#fff8e1','#ede7f6','#fbe9e7','#f3f4f6']
+
 // ── Grid math ─────────────────────────────────────────────────────────────────
 const { width: W } = Dimensions.get('window')
 const GAP    = 1.5                        // px between tiles
@@ -45,8 +48,9 @@ const Tile = memo(function Tile({
       {url ? (
         <Image source={{ uri: url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
       ) : (
-        <View style={[StyleSheet.absoluteFill, t.empty]}>
+        <View style={[StyleSheet.absoluteFill, t.empty, { backgroundColor: PLACEHOLDER_COLORS[Math.abs(item.id?.charCodeAt(0) ?? 0) % PLACEHOLDER_COLORS.length] }]}>
           <Text style={t.emptyLetter}>{initial}</Text>
+          {item.category ? <Text style={t.emptyCat}>{item.category}</Text> : null}
         </View>
       )}
 
@@ -237,6 +241,7 @@ export default function SearchScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={s.pillsRow}
+        style={{ flexGrow: 0 }}
       >
         {categories.map(cat => {
           const active = category === cat
@@ -295,11 +300,11 @@ const s = StyleSheet.create({
   clearX:     { fontSize: 14, color: '#fff', lineHeight: 17, fontWeight: '600', marginTop: -1 },
   filterIcon: { padding: 4 },
 
-  pillsRow: { paddingHorizontal: 14, paddingBottom: 8, gap: 7 },
+  pillsRow: { paddingHorizontal: 14, paddingBottom: 8, gap: 7, alignItems: 'center' },
   pill: {
     paddingHorizontal: 14, paddingVertical: 7,
     borderRadius: 20, borderWidth: 1, borderColor: '#ddd',
-    backgroundColor: '#fff',
+    backgroundColor: '#fff', alignSelf: 'center',
   },
   pillActive:     { borderColor: '#111', borderWidth: 1.5 },
   pillText:       { fontSize: 13, fontWeight: '500', color: '#444' },
@@ -312,8 +317,9 @@ const s = StyleSheet.create({
 
 // ── Tile styles ───────────────────────────────────────────────────────────────
 const t = StyleSheet.create({
-  empty:       { alignItems: 'center', justifyContent: 'center', backgroundColor: '#262626' },
-  emptyLetter: { fontSize: 26, fontWeight: '700', color: '#444' },
+  empty:       { alignItems: 'center', justifyContent: 'center' },
+  emptyLetter: { fontSize: 22, fontWeight: '800', color: 'rgba(0,0,0,0.18)' },
+  emptyCat:    { fontSize: 9, fontWeight: '600', color: 'rgba(0,0,0,0.2)', marginTop: 4, textAlign: 'center', paddingHorizontal: 6 },
 
   // Video play indicator — top right
   play: {
